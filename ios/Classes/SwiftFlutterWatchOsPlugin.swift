@@ -274,14 +274,14 @@ extension SwiftFlutterWatchOsConnectivityPlugin: WCSessionDelegate{
     
     public func sessionDidBecomeInactive(_ session: WCSession) {
         DispatchQueue.main.async {
-            self.callbackChannel.invokeMethod("activateStateChanged", arguments: session.activationState)
+            self.callbackChannel.invokeMethod("activateStateChanged", arguments: session.activationState.rawValue)
         }
         getPairedDeviceInfo(session: session)
     }
     
     public func sessionDidDeactivate(_ session: WCSession) {
         DispatchQueue.main.async {
-            self.callbackChannel.invokeMethod("activateStateChanged", arguments: session.activationState)
+            self.callbackChannel.invokeMethod("activateStateChanged", arguments: session.activationState.rawValue)
         }
         getPairedDeviceInfo(session: session)
     }
