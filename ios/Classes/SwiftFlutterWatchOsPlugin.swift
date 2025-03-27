@@ -88,17 +88,28 @@ public class SwiftFlutterWatchOsConnectivityPlugin: NSObject, FlutterPlugin {
             result(getApplicationContext(session: watchSession!))
         case "updateApplicationContext":
             checkForWatchSession(result: result)
-            if let sentApplicationContext = call.arguments as? [String: Any]{
-                do{
+            if let sentApplicationContext = call.arguments as? [String: Any] {
+                do {
                     try watchSession?.updateApplicationContext(sentApplicationContext)
                     DispatchQueue.main.async {
                         self.callbackChannel.invokeMethod("onApplicationContextUpdated", arguments: self.getApplicationContext(session: self.watchSession!))
                     }
-                }catch{
-                    handleFlutterError(result: result, message: error.localizedDescription)
+                    result(nil)
+                } catch {
+                    let unsupported = findUnsupportedTypes(in: sentApplicationContext)
+                    if !unsupported.isEmpty {
+                        let message = unsupported
+                            .map { "\($0.path) (\($0.type))" }
+                            .joined(separator: ", ")
+                        handleFlutterError(result: result, message: "Unsupported types at: \(message)")
+                        return
+                    } else {
+                        handleFlutterError(result: result, message: error.localizedDescription)
+                    }
                 }
+            } else {
+                handleFlutterError(result: result, message: "Arguments were not a dictionary.")
             }
-            result(nil)
         case "transferUserInfo":
             checkForWatchSession(result: result)
             if let arguments = call.arguments as? [String: Any], let userInfo = arguments["userInfo"] as? [String: Any], let isComplication = arguments["isComplication"] as? Bool{
@@ -381,6 +392,37 @@ extension SwiftFlutterWatchOsConnectivityPlugin: WCSessionDelegate{
             handleCallbackError(message: error.localizedDescription)
         }
         
+    }
+
+    private func findUnsupportedTypes(in dict: [String: Any], path: String = "") -> [(path: String, type: String)] {
+        var unsupported: [(path: String, type: String)] = []
+
+        for (key, value) in dict {
+            let currentPath = path.isEmpty ? key : "\(path).\(key)"
+
+            switch value {
+            case is String, is Int, is Double, is Bool, is Date, is Data:
+                continue
+
+            case let array as [Any]:
+                for (index, item) in array.enumerated() {
+                    let itemPath = "\(currentPath)[\(index)]"
+                    if let subDict = item as? [String: Any] {
+                        unsupported.append(contentsOf: findUnsupportedTypes(in: subDict, path: itemPath))
+                    } else if !(item is String || item is Int || item is Double || item is Bool || item is Date || item is Data) {
+                        unsupported.append((itemPath, "\(type(of: item))"))
+                    }
+                }
+
+            case let subDict as [String: Any]:
+                unsupported.append(contentsOf: findUnsupportedTypes(in: subDict, path: currentPath))
+
+            default:
+                unsupported.append((currentPath, "\(type(of: value))"))
+            }
+        }
+
+        return unsupported
     }
 }
 
